@@ -230,7 +230,8 @@ def initial_condition(s0_x, s0_v, bhspin):
     return vmap(concatenate_func, in_axes=(1, 1))(s0_x, s0_v)
 
 
-def geodesic_integrator(N, s0, div, tol, bhspin):
+def geodesic_integrator(N, s0, div, tol, bhspin,
+                        outer_limit=1500, only_positions=False):
     """
     Geodesic integrator using RK4 method and adapative step size as
     described in arxiv:2304.03804.
@@ -239,6 +240,8 @@ def geodesic_integrator(N, s0, div, tol, bhspin):
     - div: division factor for the timestep
     - tol: tolerance for the timestep
     - bhspin: black hole spin parameter
+    - outer_limit: maximum R for outward geodesic integration (default = 1500.)
+    - only_positions: only return geodesic positions (default = False)
 
     TODO: consider making various arguments optional kwarg
     """
@@ -248,7 +251,7 @@ def geodesic_integrator(N, s0, div, tol, bhspin):
         # get new timestep
         dt = -(radius_cal(s0[:, :4], bhspin) - radius_EH(bhspin)) / div
         condition = jnp.logical_or(jnp.isnan(dt), jnp.abs(dt)*div < tol)
-        condition = jnp.logical_or(condition, jnp.abs(dt)*div > 1500)
+        condition = jnp.logical_or(condition, jnp.abs(dt)*div > outer_limit)
         dt = lax.select(condition, jnp.zeros_like(dt), dt)
 
         # get new state
@@ -265,6 +268,9 @@ def geodesic_integrator(N, s0, div, tol, bhspin):
         dt = lax.select(condition, jnp.zeros_like(dt), dt)
         condition = jnp.broadcast_to(condition[:, None], s0.shape)
         new_state = lax.select(condition, s0, new_state)
+
+        if only_positions:
+            return new_state, (s0[:, :4], dt)
 
         return new_state, (s0, dt)
 
